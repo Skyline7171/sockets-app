@@ -30,13 +30,13 @@ class SocketManager(
                 Log.d("SOCKET", "¡Conectado exitosamente al servidor!")
             }
 
-            // 1. SOBRECARGA PARA TEXTO PLANO (La que usa C# por defecto)
+            // SOBRECARGA PARA TEXTO PLANO (La que usa C# por defecto)
             override fun onMessage(webSocket: WebSocket, text: String) {
                 Log.d("SOCKET", "Mensaje recibido (Texto): $text")
                 procesarMensajeJson(text)
             }
 
-            // 2. SOBRECARGA PARA TRAMAS DE BYTES (Protección ante pérdidas de bytes)
+            // SOBRECARGA PARA TRAMAS DE BYTES (Protección ante pérdidas de bytes)
             override fun onMessage(webSocket: WebSocket, bytes: okio.ByteString) {
                 // Forzamos la decodificación manual a UTF-8 directo de los bytes binarios
                 val text = bytes.string(Charsets.UTF_8)

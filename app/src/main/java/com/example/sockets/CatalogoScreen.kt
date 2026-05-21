@@ -1,6 +1,5 @@
 package com.example.sockets
 
-// Importación para soporte de imágenes asíncronas con Coil
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -10,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -22,6 +22,7 @@ import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator // Importación del Spinner de carga nativo
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.SnackbarDuration
@@ -47,6 +48,7 @@ import kotlinx.coroutines.launch
 fun CatalogoScreenView(
     listaProductos: List<Producto>,
     carrito: Map<Int, Int>,
+    isLoading: Boolean, // Controla si el Socket sigue esperando respuesta
     innerPadding: PaddingValues,
     onCarritoChanged: (MutableMap<Int, Int>) -> Unit,
     onNavigateToCarrito: () -> Unit
@@ -56,21 +58,18 @@ fun CatalogoScreenView(
     val coroutineScope = rememberCoroutineScope()
 
     // --- FILTRADO DE STOCK ---
-    // Solo tomamos en cuenta productos que tengan stock disponible mayor a 0
     val productosDisponibles = remember(listaProductos) {
         listaProductos.filter { it.Stock > 0 }
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(modifier = Modifier.fillMaxSize().padding(innerPadding).padding(horizontal = 16.dp)) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
-                .padding(horizontal = 16.dp)
         ) {
             // --- ENCABEZADO ---
             Row(
-                modifier = Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 4.dp),
+                modifier = Modifier.fillMaxWidth().padding(top = 18.dp, bottom = 4.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -105,8 +104,44 @@ fun CatalogoScreenView(
                 modifier = Modifier.padding(bottom = 16.dp)
             )
 
-            // --- VALIDACIÓN DE LISTA VACÍA ---
-            if (productosDisponibles.isEmpty()) {
+            // --- MANEJO DE ESTADOS DE LA PANTALLA (CARGA VS CONTENIDO) ---
+            if (isLoading) {
+                // ESTADO DE CARGA (SOCKET DURMIENDO / CONECTANDO)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        CircularProgressIndicator(
+                            color = colorResource(id = R.color.AccentColor),
+                            strokeWidth = 4.dp,
+                            modifier = Modifier.size(48.dp)
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "Conectando con el servidor remoto...",
+                            color = colorResource(id = R.color.TextPrimary),
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "Esto puede tardar algunos segundos la primera vez",
+                            color = colorResource(id = R.color.TextSecondary),
+                            fontSize = 13.sp,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(horizontal = 32.dp)
+                        )
+                    }
+                }
+            } else if (productosDisponibles.isEmpty()) {
+                // ESTADO DE LISTA VACÍA (SOCKET RESPONDIÓ PERO NO HAY DATA)
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -122,7 +157,7 @@ fun CatalogoScreenView(
                     )
                 }
             } else {
-                // --- LISTA DE PRODUCTOS ---
+                // ESTADO CON DATOS LISTOS (MUESTRA EL CATÁLOGO)
                 LazyColumn(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -140,10 +175,8 @@ fun CatalogoScreenView(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-
-                                // SECCIÓN DE IMAGEN (Adaptado para soportar URL)
                                 AsyncImage(
-                                    model = producto.ImagenUrl, // URL que vendrá desde el C# Server
+                                    model = producto.ImagenUrl,
                                     contentDescription = producto.Nombre,
                                     modifier = Modifier
                                         .size(70.dp)
@@ -154,7 +187,6 @@ fun CatalogoScreenView(
 
                                 Spacer(modifier = Modifier.width(12.dp))
 
-                                // DETALLES DEL PRODUCTO
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
                                         text = producto.Nombre,
@@ -174,7 +206,6 @@ fun CatalogoScreenView(
                                     )
                                 }
 
-                                // CONTROLES DE CANTIDAD
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     IconButton(
                                         onClick = {
@@ -203,7 +234,6 @@ fun CatalogoScreenView(
                                                 nuevoCarrito[producto.Id] = cantidadEnCarrito + 1
                                                 onCarritoChanged(nuevoCarrito)
                                             } else {
-                                                // ADVERTENCIA DE STOCK: Lanza el mensaje si intenta exceder el límite
                                                 coroutineScope.launch {
                                                     snackbarHostState.currentSnackbarData?.dismiss()
                                                     snackbarHostState.showSnackbar(
@@ -224,7 +254,6 @@ fun CatalogoScreenView(
             }
         }
 
-        // --- CONTENEDOR DEL SNACKBAR (Flota sobre la UI al fondo de la pantalla) ---
         SnackbarHost(
             hostState = snackbarHostState,
             modifier = Modifier

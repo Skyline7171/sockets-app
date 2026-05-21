@@ -63,11 +63,18 @@ fun AppNavigationContainer(urlServer: String, innerPadding: PaddingValues) {
 
     val mainHandler = remember { Handler(Looper.getMainLooper()) }
 
+    // --- LÓGICA DE CONTROL DE CARGA ---
+    // Inicia en true para capturar el tiempo en que el Socket despierta al servidor
+    var cargandoProductos by remember { mutableStateOf(true) }
+
     // --- INICIALIZACIÓN DEL SOCKET Y CALLBACKS ---
     val socketManager = remember {
         SocketManager(
             onCatalogoRecibido = { productos ->
-                mainHandler.post { listaProductos = productos }
+                mainHandler.post {
+                    listaProductos = productos
+                    cargandoProductos = false // <--- APAGA LA ANIMACIÓN: Los datos llegaron con éxito
+                }
             },
             onProformaRecibida = { reporte ->
                 mainHandler.post {
@@ -106,7 +113,6 @@ fun AppNavigationContainer(urlServer: String, innerPadding: PaddingValues) {
             Surface(
                 shape = RoundedCornerShape(16.dp),
                 color = colorResource(id = R.color.SurfaceColor),
-                // Limitamos la altura máxima del Dialog al 80% de la pantalla para que nunca colapse el UI
                 modifier = Modifier
                     .fillMaxWidth()
                     .fillMaxHeight(0.8f)
@@ -116,7 +122,6 @@ fun AppNavigationContainer(urlServer: String, innerPadding: PaddingValues) {
                     modifier = Modifier.padding(20.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // 1. TÍTULO (Fijo arriba)
                     Text(
                         text = "¡Compra Procesada!",
                         color = colorResource(id = R.color.TextPrimary),
@@ -125,11 +130,9 @@ fun AppNavigationContainer(urlServer: String, innerPadding: PaddingValues) {
                         modifier = Modifier.padding(bottom = 12.dp)
                     )
 
-                    // 2. CONTENIDO SCROLLEABLE (Se come el espacio sobrante sin empujar el botón)
-                    // Usamos una LazyColumn para manejar el texto largo de forma eficiente
                     LazyColumn(
                         modifier = Modifier
-                            .weight(1f) // Esto obliga a la lista a ocupar solo el espacio disponible
+                            .weight(1f)
                             .fillMaxWidth()
                             .background(colorResource(id = R.color.DarkBackground), RoundedCornerShape(8.dp))
                             .padding(12.dp)
@@ -139,7 +142,6 @@ fun AppNavigationContainer(urlServer: String, innerPadding: PaddingValues) {
                                 text = proformaTexto!!,
                                 color = colorResource(id = R.color.TextPrimary),
                                 fontSize = 13.sp,
-                                // Mantiene el formato original de tabulaciones y saltos de línea del servidor C#
                                 style = androidx.compose.ui.text.TextStyle(lineHeight = 18.sp)
                             )
                         }
@@ -147,7 +149,6 @@ fun AppNavigationContainer(urlServer: String, innerPadding: PaddingValues) {
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // 3. BOTÓN DE CIERRE (Fijo abajo)
                     Button(
                         onClick = {
                             mostrarDialogoProforma = false
@@ -173,6 +174,7 @@ fun AppNavigationContainer(urlServer: String, innerPadding: PaddingValues) {
             CatalogoScreenView(
                 listaProductos = listaProductos,
                 carrito = carrito,
+                isLoading = cargandoProductos, // <--- ENLACE DEL ESTADO: Pasa la bandera de carga a la vista
                 innerPadding = innerPadding,
                 onCarritoChanged = { carrito = it },
                 onNavigateToCarrito = {
@@ -202,7 +204,6 @@ fun AppNavigationContainer(urlServer: String, innerPadding: PaddingValues) {
         }
 
         composable<RutaVerificacion> { backStackEntry ->
-            // Extracción segura del argumento de navegación instanciado desde C#
             val argumentos = backStackEntry.toRoute<RutaVerificacion>()
 
             VerificacionScreenView(
