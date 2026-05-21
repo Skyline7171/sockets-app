@@ -22,12 +22,33 @@ class SocketManager(
     private var webSocket: WebSocket? = null
     private val gson = Gson()
 
+    // --- NUEVOS ESTADOS DE CONTROL DE RED ---
+    private var isConnected = false
+    private var isConnecting = false
+
+    /**
+     * Valida si el socket está activo y listo para transmitir datos.
+     * Es la función clave que llamará tu NavHost antes de procesar la compra.
+     */
+    fun estaConectado(): Boolean {
+        return webSocket != null && isConnected
+    }
+
     fun conectar(url: String) {
+        // Si ya está conectado o en proceso de conexión, evitamos duplicar sockets
+        if (isConnected || isConnecting) {
+            Log.d("SOCKET", "Conexión omitida: Ya existe un canal activo o en proceso.")
+            return
+        }
+
+        isConnecting = true
         val request = Request.Builder().url(url).build()
 
         webSocket = client.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 Log.d("SOCKET", "¡Conectado exitosamente al servidor!")
+                isConnected = true
+                isConnecting = false
             }
 
             // SOBRECARGA PARA TEXTO PLANO (La que usa C# por defecto)
@@ -38,18 +59,15 @@ class SocketManager(
 
             // SOBRECARGA PARA TRAMAS DE BYTES (Protección ante pérdidas de bytes)
             override fun onMessage(webSocket: WebSocket, bytes: okio.ByteString) {
-                // Forzamos la decodificación manual a UTF-8 directo de los bytes binarios
                 val text = bytes.string(Charsets.UTF_8)
                 Log.d("SOCKET", "Mensaje recibido (Bytes forzados a UTF-8): $text")
                 procesarMensajeJson(text)
             }
 
-            // Función auxiliar interna para no duplicar el código de parseo
             private fun procesarMensajeJson(jsonText: String) {
                 try {
                     val respuesta = gson.fromJson(jsonText, RespuestaServer::class.java)
 
-                    // Evaluamos las acciones que nos manda el backend en C#
                     when (respuesta.accion) {
                         "CATALOGO" -> respuesta.productos?.let { onCatalogoRecibido(it) }
                         "PEDIR_CODIGO" -> onPedirCodigo()
@@ -61,8 +79,25 @@ class SocketManager(
                 }
             }
 
+            override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+                Log.d("SOCKET", "El servidor está cerrando la conexión... Código: $code")
+                marcarDesconectado()
+            }
+
+            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                Log.d("SOCKET", "Conexión del socket completamente cerrada de forma limpia.")
+                marcarDesconectado()
+            }
+
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 Log.e("SOCKET", "Fallo en la conexión: ${t.message}")
+                marcarDesconectado()
+            }
+
+            // Función interna para resetear las banderas limpiamente en cualquier falla o cierre
+            private fun marcarDesconectado() {
+                isConnected = false
+                isConnecting = false
             }
         })
     }
@@ -73,7 +108,6 @@ class SocketManager(
         webSocket?.send(jsonStr)
     }
 
-    // Despacha el código a C# para su validación
     fun enviarVerificacion(correo: String, codigo: String) {
         val solicitud = SolicitudVerificacion(CorreoCliente = correo, Codigo = codigo)
         val jsonStr = gson.toJson(solicitud)
@@ -83,5 +117,7 @@ class SocketManager(
 
     fun desconectar() {
         webSocket?.close(1000, "App cerrada")
+        isConnected = false
+        isConnecting = false
     }
 }

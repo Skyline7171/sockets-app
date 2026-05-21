@@ -50,7 +50,7 @@ fun CatalogoScreenView(
     carrito: Map<Int, Int>,
     isLoading: Boolean, // Controla si el Socket sigue esperando respuesta
     innerPadding: PaddingValues,
-    onCarritoChanged: (MutableMap<Int, Int>) -> Unit,
+    onCarritoChanged: (Map<Int, Int>) -> Unit,
     onNavigateToCarrito: () -> Unit
 ) {
     // --- CONTROL DE ADVERTENCIAS (SNACKBAR) ---

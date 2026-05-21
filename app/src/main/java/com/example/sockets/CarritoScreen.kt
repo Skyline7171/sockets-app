@@ -1,15 +1,17 @@
 package com.example.sockets
 
-// Importación para soporte de imágenes asíncronas con Coil
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.navigationBarsPadding // <-- NUEVO IMPORT
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -31,11 +33,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -49,14 +51,13 @@ fun CarritoScreenView(
     carrito: Map<Int, Int>,
     correoCliente: String,
     innerPadding: PaddingValues,
-    onCarritoChanged: (MutableMap<Int, Int>) -> Unit,
+    onCarritoChanged: (Map<Int, Int>) -> Unit,
     onCorreoChanged: (String) -> Unit,
     onBackNavigate: () -> Unit,
     onGestionarCompra: () -> Unit
 ) {
     val correoValido = remember(correoCliente) { isEmailValid(correoCliente) }
 
-    // Se recalcula automáticamente solo si el contenido del carrito cambia
     val costoTotal = remember(carrito, listaProductos) {
         var suma = 0.0
         carrito.forEach { (idProducto, cantidad) ->
@@ -68,16 +69,25 @@ fun CarritoScreenView(
         suma
     }
 
+    // --- EL BOTÓN DE PÁNICO: CÁLCULO MANUAL NATIVO EN PÍXELES ---
+    val density = LocalDensity.current
+    val imeBottom = WindowInsets.ime.getBottom(density)
+    val tecladoAbierto = imeBottom > 0
+
+    // Convertimos los píxeles puros del teclado a unidades DP legibles por Compose
+    val paddingTecladoManual = with(density) { imeBottom.toDp() }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(innerPadding)
-            .padding(horizontal = 16.dp)
+            .padding(top = innerPadding.calculateTopPadding())
     ) {
         // --- ENCABEZADO ---
         Row(
-            modifier = Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 16.dp),
-            verticalAlignment = Alignment.CenterVertically
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 16.dp),
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
         ) {
             IconButton(onClick = onBackNavigate) {
                 Icon(
@@ -87,16 +97,19 @@ fun CarritoScreenView(
                 )
             }
             Text(
-                text = "Tu Carrito de Compras",
+                text = "Carrito de Compras",
                 color = colorResource(id = R.color.TextPrimary),
                 fontSize = 22.sp,
                 fontWeight = FontWeight.Bold
             )
         }
 
-        // --- LISTA DE ITEMS DEL CARRITO ---
+        // --- LISTA DE PRODUCTOS ---
         LazyColumn(
-            modifier = Modifier.weight(1f).fillMaxWidth(),
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             val itemsCarrito = listaProductos.filter { carrito.containsKey(it.Id) }
@@ -110,10 +123,11 @@ fun CarritoScreenView(
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Row(
-                        modifier = Modifier.padding(12.dp).fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
+                        modifier = Modifier
+                            .padding(12.dp)
+                            .fillMaxWidth(),
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
                     ) {
-                        // VISUALIZACIÓN DE LA IMAGEN
                         AsyncImage(
                             model = producto.ImagenUrl,
                             contentDescription = producto.Nombre,
@@ -126,14 +140,13 @@ fun CarritoScreenView(
 
                         Spacer(modifier = Modifier.width(12.dp))
 
-                        // DETALLES DEL PRODUCTO (Se expande protegiendo textos largos)
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = producto.Nombre,
                                 color = colorResource(id = R.color.TextPrimary),
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.Bold,
-                                maxLines = 2 // Evita que rompa el alto de la tarjeta si es extremadamente largo
+                                maxLines = 2
                             )
                             Text(
                                 text = "$${producto.Precio}",
@@ -144,9 +157,8 @@ fun CarritoScreenView(
 
                         Spacer(modifier = Modifier.width(8.dp))
 
-                        // COLUMNA DE CANTIDAD Y SUBTOTAL (Alineados a la derecha)
                         Column(
-                            horizontalAlignment = Alignment.End,
+                            horizontalAlignment = androidx.compose.ui.Alignment.End,
                             verticalArrangement = Arrangement.Center
                         ) {
                             Text(
@@ -158,7 +170,7 @@ fun CarritoScreenView(
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
                                 text = "$${String.format(java.util.Locale.US, "%.2f", subtotal)}",
-                                color = colorResource(id = R.color.AccentColor), // Color de énfasis para distinguir el dinero
+                                color = colorResource(id = R.color.AccentColor),
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.Bold
                             )
@@ -168,21 +180,30 @@ fun CarritoScreenView(
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // --- PANEL DE PAGO E INFORMACIÓN DE CLIENTE ---
+        // --- PANEL DE PAGO INYECTADO ---
         Surface(
             color = colorResource(id = R.color.SurfaceColor),
-            shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
-            modifier = Modifier.fillMaxWidth()
+            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+            tonalElevation = 8.dp,
+            modifier = Modifier
+                .fillMaxWidth()
+                // Evitamos que el botón quede oculto bajo la barra de navegación nativa
+                .padding(bottom = if (tecladoAbierto) paddingTecladoManual else 0.dp)
+                .then(
+                    if (!tecladoAbierto) Modifier.navigationBarsPadding()
+                    else Modifier
+                )
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-
-                // SECCIÓN NUEVA: Visualización del costo total acumulado
+            Column(
+                modifier = Modifier
+                    .padding(horizontal = 24.dp, vertical = 20.dp)
+            ) {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 16.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
                 ) {
                     Text(
                         text = "Total a pagar:",
@@ -193,7 +214,7 @@ fun CarritoScreenView(
                     Text(
                         text = "$${String.format(java.util.Locale.US, "%.2f", costoTotal)}",
                         color = colorResource(id = R.color.TextPrimary),
-                        fontSize = 22.sp,
+                        fontSize = 24.sp,
                         fontWeight = FontWeight.ExtraBold
                     )
                 }
@@ -220,7 +241,7 @@ fun CarritoScreenView(
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
                 Button(
                     onClick = onGestionarCompra,
@@ -229,11 +250,13 @@ fun CarritoScreenView(
                         containerColor = colorResource(id = R.color.AccentColor),
                         disabledContainerColor = Color.Gray.copy(alpha = 0.3f)
                     ),
-                    modifier = Modifier.fillMaxWidth().height(50.dp),
-                    shape = RoundedCornerShape(8.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp),
+                    shape = RoundedCornerShape(12.dp)
                 ) {
                     Text(
-                        text = "Gestión de Pedido",
+                        text = "Realizar pedido",
                         color = colorResource(id = R.color.TextPrimary),
                         fontWeight = FontWeight.Bold,
                         fontSize = 16.sp
